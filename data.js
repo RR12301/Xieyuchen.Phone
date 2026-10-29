@@ -341,7 +341,7 @@ const chatData={
   ['［下午茶.jpg］','them:产品部Yuki'],
   ['超赞！','them:产品部Yuki'],
   ['哇！今天是一人一份的吗','them:人事部Mason'],
-  ['我们楼好像还没拿到','them:人事部Niko'],
+  ['我们好像还没拿到','them:人事部Niko'],
   ['是的，今天是一人一份','them:行政部Lucy'],
   ['可能还没发到你们','them:行政部Lucy'],
   ['也可以去茶水间自取','them:行政部Lucy'],
