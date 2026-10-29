@@ -7,13 +7,14 @@ const SCREEN=$('#screen'),APP=$('#appL'),HOME=$('#homeL'),LOCK=$('#lockL'),OV=$(
 const esc=v=>String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
 /* ============================ 状态 ============================ */
-const SAVE_KEY='x_phone_state_v4';
+const SAVE_KEY='x_phone_state_v5';
 let view='lock',curDark=true,SC=1,lastRect=null,animTok=0,pendingOpen=null,homePage=0;
 let pincode='',noteId=0,mailId=0,missOnly=false;
 let selectedDay=TODAY.d,calMonth=TODAY.m,chatId=MAIN;
 let unread={秀秀:0,吴邪:0,胖子:0,苏万:0,夏池堂:0,'Ryan Rochad':0};
 let mainUnread=0,todayChat=[],replyStage=0,lineIdx=0,typing=false,pendingText='',replyBusy=false;
 let readMail=new Set(emails.map((m,i)=>m.date!=='今天'?i:-1).filter(i=>i>=0)),nowSong=-1;
+let momentLikes={};
 let alarmOn=ALARM.on!==false;
 let callState='',callStage=0,declined=0,extraCalls=[],callTimer=null,callAudio=null;
 let tetBest=0;
@@ -23,7 +24,7 @@ function saveState(){
  try{localStorage.setItem(SAVE_KEY,JSON.stringify({
   unlocked:view!=='lock'&&view!=='pin',lastApp:lastAppId,homePage,curView:view,
   todayChat,replyStage,mainUnread,unread,callStage,declined,extraCalls,
-  readMail:[...readMail],tetBest,noteId,mailId,chatId,alarmOn,reelIdx,nowSong
+  readMail:[...readMail],tetBest,noteId,mailId,chatId,alarmOn,reelIdx,nowSong,momentLikes
  }))}catch(e){}
 }
 function loadState(){
@@ -228,7 +229,7 @@ function bindHomeSwipe(){let x0=null,y0=0;
   HOME.querySelectorAll('.hdots i').forEach((d,i)=>d.classList.toggle('on',i===homePage))}}
 
 /* ============================ 页面引擎 ============================ */
-const PARENT={note:'notes',chat:'wechat',maild:'mail',reel:'instagram',screentime:'settings',safsearch:'safari'};
+const PARENT={note:'notes',chat:'wechat',maild:'mail',reel:'instagram',screentime:'settings',safsearch:'safari',discover:'wechat',moments:'discover'};
 const rootOf=v=>PARENT[v]||v;
 function viewDark(){if(['lock','pin','home'].includes(view))return true;const p=APP.lastElementChild;return!!(p&&p.dataset.dark)}
 function wireScroll(pg){const sc=pg.querySelector('.scroll');if(sc)sc.addEventListener('scroll',()=>pg.classList.toggle('scrolled',sc.scrollTop>38),{passive:true})}
@@ -301,7 +302,64 @@ VIEWS.wechat=()=>{
  return{cls:'wxapp',html:`<div class="wx-h"><span class="wx-l"></span><b>${t('chats')}<small>（${totalUnread}）</small></b><span>${G.search}${G.chatPlus}</span></div>
  <div class="scroll">${[...pinned,...rest].map(id=>{const av=avatarOf(id)||'';const pv=chatPreview(id);const cnt=(id===MAIN?mainUnread:unread[id])||0;const muted=!!MUTED[id];
   return `<button class="crow ${id===MAIN?'crowpin':''}" onclick="chatId='${id}';push('chat')"><div class="av">${av?`<img src="${av}" alt="">`:G.sil}</div><div style="flex:1;min-width:0"><div class="cn">${esc(id)}${GROUP_CHATS[id]?`<small>${GROUP_CHATS[id]}</small>`:''}</div><div class="cp">${esc(pv.text)}</div></div><div class="cm"><span class="ct">${esc(pv.time)}</span><span class="cm2">${cnt?(muted?'<span class="cdot"></span>':`<span class="kbdg">${cnt}</span>`):''}${muted?`<span class="cmute">${G.bellOff}</span>`:''}</span></div></button>`}).join('')}</div>
- ${tabbar([['chat','微信'],['contacts','通讯录'],['compass','发现'],['person','我']],0)}`}}
+ ${wxTabbar(0)}`}}
+function wxTabbar(on){const items=[['chat','微信'],['contacts','通讯录'],['compass','发现'],['person','我']];
+ return `<div class="tabbar">${items.map(([ic,l],i)=>`<button class="${i===on?'on':''}" onclick="wxTab(${i})">${G[ic]||ic}<span>${l}</span></button>`).join('')}</div>`}
+function wxTab(i){
+ if(i===0){if(view==='discover')back();else if(view==='moments'){back();back()}}
+ else if(i===2){if(view==='wechat')push('discover');else if(view==='moments')back()}}
+
+/* --- 发现 / 朋友圈 --- */
+const moName=n=>n==='X'?ME:n;
+function ensureMomentLikes(){MOMENTS.forEach(m=>{if(!momentLikes[m.id])momentLikes[m.id]=[...m.likes]})}
+function likesHTML(id){const lk=(momentLikes[id]||[]).map(moName);
+ if(!lk.length)return '';
+ return `<svg viewBox="0 0 24 24" width="13" height="13" style="vertical-align:-2px;margin-right:5px"><path d="M12 20s-7-4.6-9.2-9A5.2 5.2 0 0 1 12 6.5 5.2 5.2 0 0 1 21.2 11c-2.2 4.4-9.2 9-9.2 9Z" fill="#576b95"/></svg>${lk.map(x=>`<b>${esc(x)}</b>`).join('，')}`}
+function phMedia(label){return `<div class="mmph">${esc(label||'[图片]')}</div>`}
+function momentMedia(m){
+ if(!m.media)return '';
+ const md=m.media;
+ if(md.t==='video')return `<div class="mmv" onclick="const v=this.querySelector('video');if(v.paused){v.play();this.classList.add('on')}else{v.pause();this.classList.remove('on')}"><video src="${md.src}" playsinline preload="metadata" onerror="this.closest('.mmv').outerHTML=phMedia('${md.label||''}')"></video><span class="mmplay"><svg viewBox="0 0 24 24" width="30" height="30"><path d="M8 5.5v13l11-6.5Z" fill="#fff"/></svg></span></div>`;
+ return `<div class="mmi"><img src="${md.src}" loading="lazy" onclick="event.stopPropagation();openViewerSrc('${md.src}',this)" onerror="this.parentElement.outerHTML=phMedia('${md.label||''}')"></div>`}
+function momentHTML(m){
+ const who=moName(m.who),av=avatarOf(who)||'';
+ const liked=(momentLikes[m.id]||[]).includes('X');
+ const lk=likesHTML(m.id);
+ const cmts=m.comments.map(c=>`<div class="mc"><b>${esc(moName(c[0]))}</b>${c[2]?`<span style="color:#111"> 回复 </span><b>${esc(moName(c[2]))}</b>`:''}<span>：${esc(c[1])}</span></div>`).join('');
+ return `<div class="mo">
+  <div class="mo-av">${av?`<img src="${av}" alt="">`:G.sil}</div>
+  <div class="mo-bd">
+   <div class="mo-nm">${esc(who)}</div>
+   ${m.text?`<div class="mo-tx">${esc(m.text)}</div>`:''}
+   ${momentMedia(m)}
+   <div class="mo-meta"><span class="mo-dt">${esc(m.date)}</span>
+    <span class="mo-btnw"><span class="mo-pop" id="mop${m.id}"><button onclick="event.stopPropagation();moLike(${m.id})"><svg viewBox="0 0 24 24" width="15" height="15"><path d="M12 20s-7-4.6-9.2-9A5.2 5.2 0 0 1 12 6.5 5.2 5.2 0 0 1 21.2 11c-2.2 4.4-9.2 9-9.2 9Z" fill="none" stroke="#fff" stroke-width="1.7"/></svg><span id="mop-t${m.id}">${liked?'取消':'赞'}</span></button></span>
+    <button class="mo-btn" onclick="moToggle(event,${m.id})"><i></i><i></i></button></span></div>
+   ${(lk||cmts)?`<div class="mo-react"><div class="mo-lk ${lk?'on':''}" id="mlk${m.id}">${lk}</div>${cmts}</div>`:''}
+  </div>
+ </div>`}
+function moToggle(ev,id){ev.stopPropagation();
+ document.querySelectorAll('.mo-pop.on').forEach(p=>{if(p.id!=='mop'+id)p.classList.remove('on')});
+ $('#mop'+id).classList.toggle('on')}
+document.addEventListener('click',()=>{document.querySelectorAll('.mo-pop.on').forEach(p=>p.classList.remove('on'))});
+function moLike(id){const lk=momentLikes[id]||(momentLikes[id]=[]);const i=lk.indexOf('X');
+ if(i>=0)lk.splice(i,1);else lk.push('X');
+ saveState();$('#mop'+id).classList.remove('on');
+ const el=$('#mlk'+id);const h=likesHTML(id);el.innerHTML=h;el.classList.toggle('on',!!h);
+ const t=$('#mop-t'+id);if(t)t.textContent=i>=0?'赞':'取消'}
+VIEWS.discover=()=>({cls:'wxapp',html:`<div class="wx-h"><span class="wx-l"></span><b>发现</b><span style="visibility:hidden">${G.search}${G.chatPlus}</span></div>
+ <div class="scroll" style="background:#ededed"><div class="dgroup">
+  <button class="drow" onclick="push('moments')"><span class="dic">${G.camera}</span><b>朋友圈</b><span class="dimg"><img src="${MOMENT_COVER}" alt=""></span>${G.chevR}</button>
+ </div></div>
+ ${wxTabbar(2)}`})
+VIEWS.moments=()=>{
+ ensureMomentLikes();
+ return{cls:'moapp',html:`<div class="mo-nav"><button class="mo-bk" onclick="back()">${G.chevL}</button><span class="mo-cam">${G.camera}</span></div>
+ <div class="mo-scroll" id="moscroll">
+  <div class="mo-cov"><img src="${MOMENT_COVER}" alt="" onclick="openViewerSrc('${MOMENT_COVER}',this)"></div>
+  <div class="mo-me"><span class="mo-name">${ME}</span><span class="mo-mav"><img src="${avatarOf(ME)}" alt=""></span></div>
+  ${[...MOMENTS].reverse().map(momentHTML).join('')}
+ </div>`}}
 
 /* --- 聊天室 --- */
 function bubbleHTML(text){
@@ -335,13 +393,12 @@ VIEWS.chat=()=>{
  const unreadOther=Object.entries(unread).filter(([k])=>k!==chatId).reduce((a,[,b])=>a+b,0)+(chatId===MAIN?0:mainUnread);
  return{cls:'chat',
   html:`<div class="chat-h"><button class="bk" onclick="back()">${G.chevL}<span>${unreadOther||''}</span></button>
-   <div class="nm">${esc(chatId)}${grp?`<small>${GROUP_CHATS[chatId]}</small>`:''}</div><div class="rt">${G.dotsH}</div></div>
-   <div class="msgs" id="msgs">${chatMsgs(chatId)}</div>
-   ${chatId===MAIN&&replyStage<liveRounds.length?`<div class="replybar" id="replybar">${liveRounds[replyStage].mine.map((s,j)=>`<button onclick="sendReply(${j})">${esc(s)}</button>`).join('')}</div>`:''}
+   <div class="nm">${esc(chatId)}${grp?`<small>${GROUP_CHATS[chatId]}</small>`:''}${MUTED[chatId]?`<span class="nm-mute">${G.bellOff}</span>`:''}</div><div class="rt">${G.dotsH}</div></div>
+   <div class="msgs" id="msgs" onclick="closeKbd()">${chatMsgs(chatId)}</div>
    <div class="cin safe"><svg viewBox="0 0 24 24"><path d="M12 4v16M4 12h16" stroke="currentColor" stroke-width="1.6"/></svg>
     <div class="fld ph" id="fld" onclick="openKbd()">${pendingText?esc(pendingText)+'<span class="cur"></span>':'发消息…'}</div>
     ${G.smile?`<span style="width:26px">${G.dots}</span>`:''}
-    <div class="snd ${pendingText?'on':''}" id="snd" onclick="sendTyped()">发送</div></div>
+    <div class="snd ${pendingText?'on':''}" id="snd" onclick="sendTyped()"><svg viewBox="0 0 24 24" style="width:19px;height:19px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linejoin:round"><path d="M3.5 11.5 20 4.5l-5.6 15-3.6-4.6-7.3-3.4z"/><path d="M10.8 14.9 20 4.5"/></svg></div></div>
    <div class="kbd" id="kbd"></div>`,
   init:pg=>{
    if(chatId===MAIN){mainUnread=0}else{unread[chatId]=0}
@@ -351,6 +408,9 @@ function scrollChat(bottom=true){const b=$('#msgs');if(b)b.scrollTop=b.scrollHei
 function openKbd(){
  if(chatId!==MAIN||replyStage>=liveRounds.length)return;
  const k=$('#kbd');if(k.classList.contains('open'))return;
+ if(!pendingText)pendingText=liveRounds[replyStage].mine[0];
+ const f=$('#fld');if(f){f.classList.remove('ph');f.innerHTML=esc(pendingText)+'<span class="cur"></span>'}
+ $('#snd')&&$('#snd').classList.add('on');
  k.innerHTML=`<div class="kin">${[['q w e r t y u i o p'],['a s f g h j k l'],['shift','z x c v b n m','bksp'],['123','space','ret']].map(row=>{
   let s=`<div class="kr">`;
   if(row.length===1){row[0].split(' ').forEach(c=>s+=`<button class="key" data-c="${c}" onpointerdown="keyTap('${c}',this)">${c}</button>`)}
@@ -365,22 +425,24 @@ function keyTap(c,el){el.classList.add('dn');setTimeout(()=>el.classList.remove(
  const f=$('#fld');if(f){f.classList.remove('ph');f.innerHTML=esc(pendingText)+'<span class="cur"></span>'}
  $('#snd')&&$('#snd').classList.add('on')}
 function backspace(){pendingText=pendingText.slice(0,-1);const f=$('#fld');if(f){if(!pendingText)f.classList.add('ph');f.innerHTML=pendingText?esc(pendingText)+'<span class="cur"></span>':'发消息…'}}
+function closeKbd(){const k=$('#kbd');if(!k||!k.classList.contains('open'))return;
+ k.classList.remove('open');pendingText='';
+ const f=$('#fld');if(f){f.classList.add('ph');f.textContent='发消息…'}$('#snd')&&$('#snd').classList.remove('on')}
+function advanceReply(){if(replyBusy||replyStage>=liveRounds.length)return;
+ replyBusy=true;const next=liveRounds[replyStage+1];
+ setTimeout(()=>{if(next)next.them.forEach((m,k)=>setTimeout(()=>deliver(m),k*900));
+  else{AFTER_REPLY.forEach((m,k)=>setTimeout(()=>deliver(m),k*900));setTimeout(incomingCall,2200)}
+  replyStage++;replyBusy=false},900)}
 function sendTyped(){if(!pendingText){openKbd();return}
  const txt=pendingText;pendingText='';$('#kbd').classList.remove('open');
  const f=$('#fld');if(f){f.classList.add('ph');f.textContent='发消息…'}$('#snd').classList.remove('on');
- appendMine(txt);}
+ appendMine(txt);advanceReply();}
 function sendReply(j){
  if(replyBusy)return;
  const stage=liveRounds[replyStage];if(!stage)return;
  const txt=stage.mine[j];
  $('#kbd').classList.remove('open');const f=$('#fld');if(f){f.classList.add('ph');f.textContent='发消息…'}$('#snd').classList.remove('on');
- appendMine(txt);
- replyBusy=true;
- const next=liveRounds[replyStage+1];
- setTimeout(()=>{
-  if(next){next.them.forEach((msg,k)=>setTimeout(()=>deliver(msg),k*900))}
-  else{AFTER_REPLY.forEach((msg,k)=>setTimeout(()=>deliver(msg),k*900));setTimeout(incomingCall,2200)}
-  replyStage++;refreshReplyBar();replyBusy=false},900)}
+ appendMine(txt);advanceReply();}
 function refreshReplyBar(){const rb=$('#replybar');if(!rb)return;
  if(replyStage>=liveRounds.length)rb.remove();else rb.innerHTML=liveRounds[replyStage].mine.map((s,j)=>`<button onclick="sendReply(${j})">${esc(s)}</button>`).join('')}
 function appendMine(txt){const tm=ampm(nowMin());todayChat.push([txt,'me',tm]);sfx('send');
@@ -527,13 +589,15 @@ VIEWS.calendar=()=>{
 function calNav(d){const n=calMonth+d;if(n<1||n>12)return;calMonth=n;selectedDay=(n===TODAY.m?TODAY.d:1);const pg=show('calendar');pg.querySelector('#calg').animate([{transform:`translateX(${d*40}%)`,opacity:0},{transform:'none',opacity:1}],{duration:350,easing:'cubic-bezier(.2,.9,.25,1)'})}
 
 /* --- 时钟 --- */
-function worldTime(off){const now=new Date();const utc=now.getTime()+now.getTimezoneOffset()*60000;const d=new Date(utc+off*3600000);
- return{dstr:String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'),day:now.getUTCDay()}}
+function worldTime(off){const now=new Date();const utc=now.getTime()+now.getTimezoneOffset()*60000;
+ const bj=new Date(utc+8*3600000),d=new Date(utc+off*3600000);
+ const rel=Math.round((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())-Date.UTC(bj.getFullYear(),bj.getMonth(),bj.getDate()))/864e5);
+ return{dstr:String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'),rel,diff:off-8}}
 function toggleAlarm(){alarmOn=!alarmOn;vib(8);sfx('key');saveState();if(view==='clock')show('clock')}
 VIEWS.clock=()=>{
  const ap=alarmParts(ALARM.h,ALARM.m);
  const rows=WORLD_CLOCKS.map(([n,off])=>{const w=worldTime(off);
-  return `<div class="wrow"><div class="wc"><b>${esc(n)}</b><small>今天，${off>=0?'+':''}${off}小时</small></div><div class="wt">${w.dstr}</div></div>`}).join('');
+  return `<div class="wrow"><div class="wc"><b>${esc(n)}</b><small>${w.rel<0?'昨天':w.rel>0?'明天':'今天'}，${w.diff>=0?'+':''}${w.diff}小时</small></div><div class="wt">${w.dstr}</div></div>`}).join('');
  return{cls:'dark',dark:true,html:`<div class="nav" style="color:#ff9f0a"><button style="color:#ff9f0a;font-size:17px;justify-self:start;padding-left:8px">${t('edit')}</button>
   <div class="nb-title">${t('alarm')}</div><div class="nb-right" style="color:#ff9f0a">${G.plus}</div></div>
   <div class="scroll"><h1 class="lt">${t('alarm')}</h1>
@@ -904,6 +968,7 @@ function boot(){
    tetBest=st.tetBest||0;homePage=st.homePage||0;chatId=st.chatId||MAIN;
    noteId=st.noteId||0;mailId=st.mailId||0;reelIdx=st.reelIdx||0;
    nowSong=(typeof st.nowSong==='number'&&st.nowSong<songs.length)?st.nowSong:-1;
+   momentLikes=st.momentLikes||{};
    alarmOn=st.alarmOn!==undefined?st.alarmOn:(ALARM.on!==false)}catch(e){}
   if(st.unlocked){
    view='home';sfx('unlock');
