@@ -7,11 +7,11 @@ const SCREEN=$('#screen'),APP=$('#appL'),HOME=$('#homeL'),LOCK=$('#lockL'),OV=$(
 const esc=v=>String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
 /* ============================ 状态 ============================ */
-const SAVE_KEY='x_phone_state_v3';
+const SAVE_KEY='x_phone_state_v4';
 let view='lock',curDark=true,SC=1,lastRect=null,animTok=0,pendingOpen=null,homePage=0;
 let pincode='',noteId=0,mailId=0,missOnly=false;
 let selectedDay=TODAY.d,calMonth=TODAY.m,chatId=MAIN;
-let unread={秀秀:0,吴邪:0,胖子:0,苏万:0,夏池堂:0,'Ryan Rochad':12};
+let unread={秀秀:0,吴邪:0,胖子:0,苏万:0,夏池堂:0,'Ryan Rochad':0};
 let mainUnread=0,todayChat=[],replyStage=0,lineIdx=0,typing=false,pendingText='',replyBusy=false;
 let readMail=new Set(emails.map((m,i)=>m.date!=='今天'?i:-1).filter(i=>i>=0)),nowSong=-1;
 let alarmOn=ALARM.on!==false;
